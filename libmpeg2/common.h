@@ -27,7 +27,7 @@ using Microsoft::WRL::RuntimeClass;
 using Microsoft::WRL::RuntimeClassFlags;
 using Microsoft::WRL::RuntimeClassType;
 
-#define MAX_QUEUE_SIZE 500
+#define MAX_QUEUE_SIZE 30
 
 #define SafeRelease(x) \
     if(x) { \

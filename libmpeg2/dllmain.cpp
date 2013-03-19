@@ -18,5 +18,5 @@ HRESULT APIENTRY DllGetActivationFactory(HSTRING clsid, IActivationFactory **fac
 HRESULT APIENTRY DllCanUnloadNow() {
 	return Microsoft::WRL::Module<Microsoft::WRL::InProc>::GetModule().Terminate() ? S_OK : S_FALSE; }
 
-STDAPI DllGetClassObject(REFCLSID clsid, REFIID riid, LPVOID FAR *ppv) {
+STDAPI DllGetClassObject(_In_ REFCLSID clsid, _In_ REFIID riid, _Outptr_ LPVOID FAR *ppv) {
 	return Microsoft::WRL::Module<Microsoft::WRL::InProc>::GetModule().GetClassObject(clsid, riid, ppv); }

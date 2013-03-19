@@ -18,6 +18,7 @@ protected:
     HRESULT process();
     HRESULT imgRead();
     HRESULT imgDispose();
+    static void interlace(BYTE *data, const BYTE *u, const BYTE *v, UINT32 count);
     HRESULT imgFill(BYTE *data, LONG stride);
     HRESULT imgCopy(IMFSample *sample);
     HRESULT imgWrite();

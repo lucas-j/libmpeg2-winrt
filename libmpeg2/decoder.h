@@ -6,6 +6,10 @@
  * - use ComPtr and more WRL templates (done)
  * - try to find out if embedding gcc .obj optimizations is possible (done)
  * - allow for reverse play as well as forward
+ * - test 1080p playback on high-power CPU (done)
+ * - implement QoS frame dropping if CPU can't keep up
+ * - test seeking, rate control, etc.
+ * - gracefully handle format changes (e.g. resolution shifts in DVB)
  */
 
 #include "common.h"

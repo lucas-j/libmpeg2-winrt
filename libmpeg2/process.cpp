@@ -121,6 +121,19 @@ HRESULT Process::imgDispose() {
     SafeRelease(sample);
     return ret; }
 
+void Process::interlace(BYTE *data, const BYTE *u, const BYTE *v, UINT32 count) {
+    /* http://en.wikipedia.org/wiki/Duff's_device */
+    UINT32 n = (count + 7) / 8;
+    switch(count % 8) {
+    case 0: do { *data++ = *u++;
+    case 7:      *data++ = *v++;
+    case 6:      *data++ = *u++;
+    case 5:      *data++ = *v++;
+    case 4:      *data++ = *u++;
+    case 3:      *data++ = *v++;
+    case 2:      *data++ = *u++;
+    case 1:      *data++ = *v++; } while(--n > 0); } }
+
 HRESULT Process::imgFill(BYTE *data, LONG stride) {
     const mpeg2_info_t *info = state->mp2info;
     HRESULT ret = info->display_fbuf && info->sequence ? S_OK : E_FAIL;
@@ -132,12 +145,13 @@ HRESULT Process::imgFill(BYTE *data, LONG stride) {
         UINT32 height = info->sequence->height;
         UINT32 chroma_width = info->sequence->chroma_width;
         UINT32 chroma_height = info->sequence->chroma_height;
-        for(UINT32 line = 0; line < state->img.height; line++, data += stride, luma += width) {
-            memcpy_s(data, stride, luma, state->img.width); }
-        for(UINT32 line = 0; line < state->img.height / 2; line++, data += stride, u += chroma_width, v += chroma_width) {
-            UINT16 *data_word = reinterpret_cast<UINT16 *>(data);
-            for(UINT32 x = 0; x < state->img.width / 2; x++) {
-                data_word[x] = (UINT16)(v[x] << 8) | (UINT16)u[x]; } } }
+        UINT32 img_height = state->img.height;
+        UINT32 img_width = state->img.width;
+        for(UINT32 line = 0; line < img_height; line++, data += stride, luma += width) {
+            memcpy_s(data, stride, luma, img_width); }
+        img_height /= 2;
+        for(UINT32 line = 0; line < img_height; line++, data += stride, u += chroma_width, v += chroma_width) {
+            interlace(data, u, v, img_width); } }
     return ret; }
 
 HRESULT Process::imgCopy(IMFSample *sample) {

@@ -52,7 +52,7 @@ STDMETHODIMP Decoder::Invoke(IMFAsyncResult *result) {
         TCHAR foo[80];
         frames++;
         if(curr - last > 1000) {
-            StringCchPrintf(foo, sizeof (foo), TEXT("FPS: %f\n"), static_cast<double>(frames) / (curr - last) * 1000);
+            StringCchPrintf(foo, 80, TEXT("FPS: %f\n"), static_cast<double>(frames) / (curr - last) * 1000);
             OutputDebugString(foo);
             last = curr;
             frames = 0; }
