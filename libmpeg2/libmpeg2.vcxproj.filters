@@ -1,0 +1,97 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="libmpeg2">
+      <UniqueIdentifier>{a796693c-535b-47d0-9104-9cad4a2b6ea1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="alloc.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="decode.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="header.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="slice.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="decoder.cpp" />
+    <ClCompile Include="uyvy.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="idct.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="motion_comp.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="cpu_accel.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="cpu_state.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="idct_mmx.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="motion_comp_mmx.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="rgb_mmx.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
+    <ClCompile Include="common.cpp" />
+    <ClCompile Include="process.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="attributes.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="config.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="inttypes.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="mpeg2.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="mpeg2_internal.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="vlc.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="decoder.h" />
+    <ClInclude Include="convert_internal.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="mpeg2convert.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="mmx.h">
+      <Filter>libmpeg2</Filter>
+    </ClInclude>
+    <ClInclude Include="common.h" />
+    <ClInclude Include="process.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="libmpeg2.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="libmpeg2.idl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="libmpeg2.txt">
+      <Filter>libmpeg2</Filter>
+    </Text>
+  </ItemGroup>
+</Project>

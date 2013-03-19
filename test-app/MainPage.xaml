@@ -1,0 +1,15 @@
+﻿<Page
+    x:Class="test_app.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:test_app"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Background="{StaticResource ApplicationPageBackgroundThemeBrush}">
+        <MediaElement x:Name="Player" HorizontalAlignment="Center" Margin="10,10,10,100" VerticalAlignment="Top" Height="900" Width="1900"/>
+        <Button Content="Play" HorizontalAlignment="Left" Height="95" Margin="10,0,0,10" VerticalAlignment="Bottom" Width="200" Click="Button_Click_1"/>
+        <Button Content="Stop" HorizontalAlignment="Right" Height="95" Margin="10,0,0,10" VerticalAlignment="Bottom" Width="200" Click="Button_Click_2"/>
+    </Grid>
+</Page>
