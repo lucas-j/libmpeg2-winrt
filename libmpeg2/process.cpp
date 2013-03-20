@@ -71,6 +71,10 @@ HRESULT Process::process() {
             ret = imgRead(); }
         else {
             switch(mpeg2_parse(state->mp2dec)) {
+            case STATE_SEQUENCE:
+                if(possibleChange()) {
+                    return MF_E_TRANSFORM_STREAM_CHANGE; }
+                break;
             case STATE_SLICE:
             case STATE_END:
             case STATE_INVALID_END:
@@ -190,3 +194,33 @@ HRESULT Process::imgWrite() {
         state->imgTS = 0; }
     SafeRelease(sample);
     return ret; }
+
+void Process::findClosest(const MFRatio *ratios, int size, double val, MFRatio *out) {
+    int closest = 0;
+    double close = ratios[closest].Numerator * 1.0 / ratios[closest].Denominator;
+    for(int x = 0; x < size; x++) {
+        double test = ratios[x].Numerator * 1.0 / ratios[x].Denominator;
+        if(abs(test - val) < abs(close - val)) {
+            closest = x;
+            close = test; } }
+    out->Numerator = ratios[closest].Numerator;
+    out->Denominator = ratios[closest].Denominator; }
+
+BOOL Process::possibleChange() {
+    static const MFRatio speeds[] = {
+        {24000, 1001}, {24, 1}, {25, 1}, {30000, 1001}, {30, 1}, {50, 1}, {60000, 1001}, {60, 1},
+        {15, 1}, {5, 1}, {10, 1}, {12, 1}};
+    ImageInfo info;
+    UINT32 width, height;
+    MFRatio aspect, fps;
+    if(state->mp2info->sequence) {
+        width = state->mp2info->sequence->display_width;
+        height = state->mp2info->sequence->display_height;
+        aspect.Numerator = state->mp2info->sequence->pixel_width;
+        aspect.Denominator = state->mp2info->sequence->pixel_height;
+        findClosest(speeds, 12, 27.0 * 1000 * 1000 / state->mp2info->sequence->frame_period, &fps);
+        info.SetSize(width, height);
+        info.SetAspect(aspect.Numerator, aspect.Denominator);
+        info.SetFPS(fps.Numerator, fps.Denominator);
+        return state->RequestChange(info); }
+    return FALSE; }

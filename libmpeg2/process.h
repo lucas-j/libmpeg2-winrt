@@ -22,6 +22,8 @@ protected:
     HRESULT imgFill(BYTE *data, LONG stride);
     HRESULT imgCopy(IMFSample *sample);
     HRESULT imgWrite();
+    static void findClosest(const MFRatio *ratios, int size, double val, MFRatio *out);
+    BOOL possibleChange();
 
 protected:
     DWORD workQueue;

@@ -56,11 +56,14 @@ public:
     STDMETHOD(RuntimeClassInitialize)();
     virtual ~DecoderState();
     DecoderState(const DecoderState &copy);
+    BOOL RequestChange(const ImageInfo &info);
+    BOOL OutputChanged() const;
+    void MakeChange();
 public:
-    ImageInfo img;
+    ImageInfo img, change;
     LONGLONG imgTS;
     LONGLONG imgDuration;
-    BOOL finished;
+    BOOL finished, changed;
     mpeg2dec_t *mp2dec;
     const mpeg2_info_t *mp2info; };
 

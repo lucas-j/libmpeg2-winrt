@@ -68,7 +68,7 @@ public:
 protected:
     BOOL allowIn() const;
     BOOL allowOut() const;
-    BOOL allowChange() const;
+    BOOL changeNeeded() const;
     HRESULT drain();
     HRESULT reset();
     HRESULT clear();
@@ -88,10 +88,16 @@ protected:
     ComPtr<DecoderState> state;
     BOOL draining;
     BOOL shutdown;
+    BOOL changing;
     DWORD workQueue;
     LONG priority;
     UINT32 inEventCount;
     LONGLONG lastTS;
+    UINT32 frames;
+    UINT32 framesSent;
+    UINT32 lastFrame;
+    UINT32 changeFrame;
+    ULONGLONG lastTick;
     ComPtr<Process> process;
     IMFMediaType *inType;
     IMFMediaType *outType;

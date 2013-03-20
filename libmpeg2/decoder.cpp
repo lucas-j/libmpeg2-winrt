@@ -1,14 +1,16 @@
 #include "decoder.h"
 #include <strsafe.h>
 
-Decoder::Decoder(): img(), draining(FALSE), shutdown(FALSE), workQueue(0), priority(0),
-        inEventCount(0), lastTS(0), process(NULL), inType(NULL), outType(NULL), mp2dec(NULL), mp2info(NULL) {
+Decoder::Decoder(): img(), draining(FALSE), shutdown(FALSE), changing(FALSE), workQueue(0), priority(0),
+        inEventCount(0), lastTS(0), frames(0), framesSent(0), lastFrame(0), changeFrame(0),
+        process(NULL), inType(NULL), outType(NULL), mp2dec(NULL), mp2info(NULL) {
     InitializeCriticalSectionEx(&crit, 100, 0);
     state = Make<DecoderState>();
     inSamples = new queue<IMFSample *>();
     outSamples = new queue<IMFSample *>();
     pending = new vector<IMFSample *>();
-    MFCreateEventQueue(&events); }
+    MFCreateEventQueue(&events);
+    lastTick = GetTickCount64(); }
 
 Decoder::~Decoder() {
     endStream();
@@ -46,15 +48,14 @@ STDMETHODIMP Decoder::Invoke(IMFAsyncResult *result) {
     HRESULT ret = process->EndProcess(result, &sample, state);
     if(sample) {
         pending->push_back(sample);
-        static ULONGLONG last = GetTickCount64();
-        static UINT32 frames = 0;
         ULONGLONG curr = GetTickCount64();
         TCHAR foo[80];
         frames++;
-        if(curr - last > 1000) {
-            StringCchPrintf(foo, 80, TEXT("FPS: %f\n"), static_cast<double>(frames) / (curr - last) * 1000);
+        if(curr - lastTick > 1000) {
+            StringCchPrintf(foo, 80, TEXT("FPS: %f\n"),
+                            static_cast<double>(frames - lastFrame) / (curr - lastTick) * 1000);
             OutputDebugString(foo);
-            last = curr;
+            lastTick = curr;
             frames = 0; }
         imgAdjust(); }
     process = nullptr;
@@ -67,6 +68,16 @@ STDMETHODIMP Decoder::Invoke(IMFAsyncResult *result) {
             inEventCount++; }
         else if(inSamples->empty()) {
             QueueEvent(METransformDrainComplete, GUID_NULL, S_OK, NULL); } }
+    if(state->changed) {
+        changing = TRUE;
+        changeFrame = frames;
+        state->MakeChange();
+        TCHAR foo[80];
+        img = state->img;
+        StringCchPrintf(foo, 80, TEXT("Changing to %dx%d (%d:%d) at %0.2f fps\n"), img.width, img.height,
+                                      img.aspect.Numerator, img.aspect.Denominator,
+                                      img.fps.Numerator * 1.0 / img.fps.Denominator);
+        OutputDebugString(foo); }
     if(!inSamples->empty() && outSamples->size() < MAX_QUEUE_SIZE) {
         StartProcess(); }
     LeaveCriticalSection(&crit);
@@ -254,8 +265,8 @@ HRESULT Decoder::SetInputType(DWORD id, IMFMediaType *type, DWORD flags) {
     if(id == 0) {
         if((flags & ~MFT_SET_TYPE_TEST_ONLY) == 0) {
             EnterCriticalSection(&crit);
-            HRESULT ret = allowChange() ? S_OK : MF_E_TRANSFORM_CANNOT_CHANGE_MEDIATYPE_WHILE_PROCESSING;
-            if(SUCCEEDED(ret) && type) {
+            HRESULT ret = type ? S_OK : E_POINTER;
+            if(SUCCEEDED(ret)) {
                 ret = checkInputType(type); }
             if(SUCCEEDED(ret) && (flags & MFT_SET_TYPE_TEST_ONLY) == 0) {
                 ret = setInputType(type); }
@@ -268,8 +279,8 @@ HRESULT Decoder::SetOutputType(DWORD id, IMFMediaType *type, DWORD flags) {
     if(id == 0) {
         if((flags & ~MFT_SET_TYPE_TEST_ONLY) == 0) {
             EnterCriticalSection(&crit);
-            HRESULT ret = allowChange() ? S_OK : MF_E_TRANSFORM_CANNOT_CHANGE_MEDIATYPE_WHILE_PROCESSING;
-            if(SUCCEEDED(ret) && type) {
+            HRESULT ret = type ? S_OK : E_POINTER;
+            if(SUCCEEDED(ret)) {
                 ret = checkOutputType(type); }
             if(SUCCEEDED(ret) && (flags & MFT_SET_TYPE_TEST_ONLY) == 0) {
                 ret = setOutputType(type); }
@@ -373,7 +384,11 @@ HRESULT Decoder::ProcessOutput(DWORD flags, DWORD count, MFT_OUTPUT_DATA_BUFFER 
             EnterCriticalSection(&crit);
             HRESULT ret = inType && outType ? S_OK : MF_E_TRANSFORM_TYPE_NOT_SET;
             if(SUCCEEDED(ret)) {
-                ret = GetSample(&samples->pSample); }
+                if(changeNeeded()) {
+                    ret = MF_E_TRANSFORM_STREAM_CHANGE;
+                    samples->dwStatus |= MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE; }
+                else {
+                    ret = GetSample(&samples->pSample); } }
             if(SUCCEEDED(ret)) {
                 if(ret == S_FALSE) {
                     ret = S_OK;
@@ -410,6 +425,7 @@ HRESULT Decoder::GetSample(IMFSample **sample) {
             ret = allowOut() ? S_OK : S_FALSE;
             if(process == NULL && !inSamples->empty()) {
                 StartProcess(); } }
+        framesSent++;
         return ret; }
     return E_POINTER; }
 
@@ -444,8 +460,8 @@ BOOL Decoder::allowIn() const {
 BOOL Decoder::allowOut() const {
     return !outSamples->empty(); }
 
-BOOL Decoder::allowChange() const {
-    return inSamples->empty() && outSamples->empty() && pending->empty(); }
+BOOL Decoder::changeNeeded() const {
+    return changing && framesSent >= changeFrame; }
 
 HRESULT Decoder::drain() {
     draining = TRUE;
@@ -467,7 +483,12 @@ HRESULT Decoder::reset() {
     state->img = img;
     state->imgTS = 0;
     state->imgDuration = img.duration;
+    changing = FALSE;
     lastTS = 0;
+    frames = 0;
+    framesSent = 0;
+    lastFrame = 0;
+    lastTick = GetTickCount64();
     inEventCount = 0;
     return S_OK; }
 
@@ -602,7 +623,9 @@ HRESULT Decoder::setInputType(IMFMediaType *type) {
         img.SetAspect(aspect.Numerator, aspect.Denominator);
         img.SetFPS(fps.Numerator, fps.Denominator);
         inType = type;
-        inType->AddRef(); }
+        inType->AddRef();
+        if(!(inSamples->empty() && outSamples->empty() && pending->empty())) {
+            state->RequestChange(img); } }
     return ret; }
 
 HRESULT Decoder::checkOutputType(IMFMediaType *type) {
@@ -625,4 +648,6 @@ HRESULT Decoder::setOutputType(IMFMediaType *type) {
     SafeRelease(outType);
     outType = type;
     outType->AddRef();
+    changing = FALSE;
+    changeFrame = 0;
     return S_OK; }

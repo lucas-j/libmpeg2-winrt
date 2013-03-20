@@ -25,8 +25,8 @@ void ImageInfo::SetFPS(DWORD numerator, DWORD denominator) {
         duration = static_cast<LONGLONG>(static_cast<DOUBLE>(fps.Denominator)
             / fps.Numerator * 10000000 + 0.5); } }
 
-DecoderState::DecoderState(): img(), imgTS(0), imgDuration(0), finished(FALSE),
-        mp2dec(NULL), mp2info(NULL) {}
+DecoderState::DecoderState(): img(), change(), imgTS(0), imgDuration(0),
+        finished(FALSE), changed(FALSE), mp2dec(NULL), mp2info(NULL) {}
 
 STDMETHODIMP DecoderState::RuntimeClassInitialize() {
     return S_OK; }
@@ -35,11 +35,32 @@ DecoderState::~DecoderState() {}
 
 DecoderState::DecoderState(const DecoderState &copy) {
     img = copy.img;
+    change = copy.change;
     imgTS = copy.imgTS;
     imgDuration = copy.imgDuration;
     finished = copy.finished;
     mp2dec = copy.mp2dec;
     mp2info = copy.mp2info; }
+
+BOOL DecoderState::RequestChange(const ImageInfo &info) {
+    if(info.width != img.width || info.height != img.height ||
+       info.aspect.Numerator != img.aspect.Numerator || info.aspect.Denominator != img.aspect.Denominator ||
+       info.fps.Numerator != img.fps.Numerator || info.fps.Denominator != img.fps.Denominator) {
+        changed = TRUE;
+        change = info;
+        change.duration = img.duration;
+        return TRUE; }
+    return FALSE; }
+
+BOOL DecoderState::OutputChanged() const {
+    return changed ? (img.height != change.height || img.width != change.width ||
+                      img.aspect.Numerator != change.aspect.Numerator ||
+                      img.aspect.Denominator != change.aspect.Denominator ? TRUE : FALSE) : FALSE; }
+
+void DecoderState::MakeChange() {
+    changed = FALSE;
+    img = change;
+    change = ImageInfo(); }
 
 ProcessSamples::ProcessSamples(IMFSample *sample): in(NULL), out(NULL) {
     SetIn(sample); }
