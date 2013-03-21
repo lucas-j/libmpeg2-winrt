@@ -545,13 +545,16 @@ void Decoder::imgAdjust() {
                 set<LONGLONG>::iterator x = timestamps.begin();
                 (*itr)->SetSampleTime(*x);
                 timestamps.erase(x); } }
-        vector<IMFSample *>::iterator end = pending->end() - MAX_QUEUE_SIZE / 4 + 1;
+        vector<IMFSample *>::iterator end = pending->end();
+        if(pending->size() > MAX_QUEUE_SIZE / 4 + 2) {
+            end = pending->end() - MAX_QUEUE_SIZE / 4 + 1; }
         for(vector<IMFSample *>::iterator itr = pending->begin(); itr != end; itr++) {
             LONGLONG ts = 0;
             (*itr)->GetSampleTime(&ts);
             if(ts == 0) {
                 imgInterpolate(itr); } }
-        end--;
+        if(end != pending->begin()) {
+            end--; }
         for(vector<IMFSample *>::iterator itr = pending->begin(); itr != end; itr++) {
             LONGLONG ts1 = 0, ts2 = 0;
             (*itr)->GetSampleTime(&ts1);

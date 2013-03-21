@@ -1,44 +1,31 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/2010/manifest">
-
   <Identity Name="0d44126a-5a93-4a9d-8023-4af9a027756a"
             Publisher="CN=Lucas"
             Version="1.0.0.0" />
-
   <Properties>
-    <DisplayName>test-app</DisplayName>
-    <PublisherDisplayName>Lucas</PublisherDisplayName>
+    <DisplayName>MPEG-2 TS Player</DisplayName>
+    <PublisherDisplayName>Lucas Jacobs</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
-
   <Prerequisites>
     <OSMinVersion>6.2.1</OSMinVersion>
     <OSMaxVersionTested>6.2.1</OSMaxVersionTested>
   </Prerequisites>
-
   <Resources>
-    <Resource Language="x-generate"/>
+    <Resource Language="x-generate" />
   </Resources>
-
   <Applications>
-    <Application Id="App"
-        Executable="$targetnametoken$.exe"
-        EntryPoint="test_app.App">
-        <VisualElements
-            DisplayName="test-app"
-            Logo="Assets\Logo.png"
-            SmallLogo="Assets\SmallLogo.png"
-            Description="test-app"
-            ForegroundText="light"
-            BackgroundColor="#464646">
-            <DefaultTile ShowName="allLogos" />
-            <SplashScreen Image="Assets\SplashScreen.png" />
-        </VisualElements>
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="test_app.App">
+      <VisualElements DisplayName="MPEG-2 TS Player" Logo="Assets\Logo.png" SmallLogo="Assets\SmallLogo.png" Description="Sample implementation of libmpeg2-winrt as a Windows 8 app." ForegroundText="dark" BackgroundColor="#ffc801" ToastCapable="false">
+        <DefaultTile ShowName="noLogos" WideLogo="Assets\WideLogo.png" ShortName="MPEG-2 Player" />
+        <SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#ffc801" />
+        <InitialRotationPreference>
+          <Rotation Preference="landscape" />
+        </InitialRotationPreference>
+      </VisualElements>
     </Application>
   </Applications>
-  <Capabilities>
-    <Capability Name="internetClient" />
-  </Capabilities>
   <Extensions>
     <Extension Category="windows.activatableClass.inProcessServer">
       <InProcessServer>
