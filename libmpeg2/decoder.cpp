@@ -96,8 +96,8 @@ HRESULT Decoder::getSample(IMFSample **sample) {
 
 void Decoder::requestSamples() {
     if(state == State_Started || state == State_Starting) {
-        for(;requests < MAX_QUEUE_SIZE; requests++) {
-            QueueEvent(METransformNeedInput, GUID_NULL, S_OK, NULL); } } }
+        QueueEvent(METransformNeedInput, GUID_NULL, S_OK, NULL);
+        requests++; } }
 
 HRESULT Decoder::beginStream() {
     HRESULT ret = S_OK;

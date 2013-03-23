@@ -156,9 +156,9 @@ HRESULT Process::imgFill(BYTE *data, LONG stride) {
         UINT32 img_width = state->img.width;
         for(UINT32 line = 0; line < img_height; line++, data += stride, luma += width) {
             memcpy_s(data, stride, luma, img_width); }
-        img_height /= 2;
         if(chroma_height >= img_height) {
             chroma_width *= 2; }
+        img_height /= 2;
         for(UINT32 line = 0; line < img_height; line++, data += stride, u += chroma_width, v += chroma_width) {
             interlace(data, u, v, img_width); } }
     return ret; }
