@@ -2,14 +2,15 @@
 
 /*
  * - split into different files (done)
- * - use state machine rather than booleans
+ * - use state machine rather than booleans (done)
  * - use ComPtr and more WRL templates (done)
  * - try to find out if embedding gcc .obj optimizations is possible (done)
  * - allow for reverse play as well as forward
  * - test 1080p playback on high-power CPU (done)
  * - implement QoS frame dropping if CPU can't keep up
- * - test seeking, rate control, etc.
- * - gracefully handle format changes (e.g. resolution shifts in DVB)
+ * - test seeking (done)
+ * - add rate control options
+ * - gracefully handle format changes (e.g. resolution shifts in DVB) (untested)
  */
 
 #include "common.h"
@@ -19,6 +20,13 @@ class Decoder: public RuntimeClass<RuntimeClassFlags<RuntimeClassType::WinRtClas
 	    ABI::Windows::Media::IMediaExtension, IMFTransform, IMFMediaEventGenerator,
         IMFShutdown, IMFAsyncCallback, IMFRealTimeClientEx> {
     InspectableClass(RuntimeClass_libmpeg2_Decoder, BaseTrust)
+
+    enum State {
+        State_Stopped,
+        State_Stopping,
+        State_Starting,
+        State_Started,
+        State_Shutdown };
 
 public:
     Decoder();
@@ -61,21 +69,23 @@ public:
     STDMETHODIMP ProcessInput(DWORD id, IMFSample *sample, DWORD flags);
     STDMETHODIMP ProcessOutput(DWORD flags, DWORD count, MFT_OUTPUT_DATA_BUFFER *samples, DWORD *status);
 
-    HRESULT StartProcess();
-    HRESULT AddSample(IMFSample *sample);
-    HRESULT GetSample(IMFSample **sample);
-
 protected:
+    void startProcess();
+    HRESULT addSample(IMFSample *sample);
+    HRESULT getSample(IMFSample **sample);
+    void requestSamples();
     BOOL allowIn() const;
-    BOOL allowOut() const;
+    BOOL allowProcess() const;
+    BOOL allowAddPending() const;
+    BOOL outReady() const;
     BOOL changeNeeded() const;
-    HRESULT drain();
     HRESULT reset();
-    HRESULT clear();
     HRESULT beginStream();
     HRESULT endStream();
+    void makeChange();
     void imgInterpolate(vector<IMFSample *>::const_iterator itr);
     void imgAdjust();
+    void outputFPS();
     static HRESULT info(IMFMediaType *type, GUID *major, GUID *minor, UINT32 *width, UINT32 *height,
                         MFRatio *fps, MFRatio *aspect);
     HRESULT checkInputType(IMFMediaType *type);
@@ -83,15 +93,16 @@ protected:
     HRESULT checkOutputType(IMFMediaType *type);
     HRESULT setOutputType(IMFMediaType *type);
 
+protected:
     CRITICAL_SECTION crit;
     ImageInfo img;
-    ComPtr<DecoderState> state;
+    ComPtr<ProcessState> procState;
+    State state;
     BOOL draining;
-    BOOL shutdown;
     BOOL changing;
     DWORD workQueue;
     LONG priority;
-    UINT32 inEventCount;
+    UINT32 requests;
     LONGLONG lastTS;
     UINT32 frames;
     UINT32 framesSent;

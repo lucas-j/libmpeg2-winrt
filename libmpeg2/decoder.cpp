@@ -1,11 +1,12 @@
 #include "decoder.h"
 #include <strsafe.h>
 
-Decoder::Decoder(): img(), draining(FALSE), shutdown(FALSE), changing(FALSE), workQueue(0), priority(0),
-        inEventCount(0), lastTS(0), frames(0), framesSent(0), lastFrame(0), changeFrame(0),
+Decoder::Decoder(): img(), state(State_Stopped), draining(FALSE), changing(FALSE),
+        workQueue(0), priority(0), requests(0), lastTS(0),
+        frames(0), framesSent(0), lastFrame(0), changeFrame(0),
         process(NULL), inType(NULL), outType(NULL), mp2dec(NULL), mp2info(NULL) {
     InitializeCriticalSectionEx(&crit, 100, 0);
-    state = Make<DecoderState>();
+    procState = Make<ProcessState>();
     inSamples = new queue<IMFSample *>();
     outSamples = new queue<IMFSample *>();
     pending = new vector<IMFSample *>();
@@ -13,421 +14,90 @@ Decoder::Decoder(): img(), draining(FALSE), shutdown(FALSE), changing(FALSE), wo
     lastTick = GetTickCount64(); }
 
 Decoder::~Decoder() {
+    /* handle edge-case where Process is still running */
     endStream();
+    Shutdown();
     SafeRelease(events);
     DeleteCriticalSection(&crit);
     delete inSamples;
     delete outSamples;
     delete pending; }
 
-STDMETHODIMP Decoder::RuntimeClassInitialize() {
-    return S_OK; }
-
-IFACEMETHODIMP Decoder::SetProperties(ABI::Windows::Foundation::Collections::IPropertySet *) {
-    return S_OK; }
-
-STDMETHODIMP Decoder::RegisterThreadsEx(DWORD *, LPCWSTR, LONG) {
-    return S_OK; }
-
-STDMETHODIMP Decoder::UnregisterThreads() {
-    return S_OK; }
-
-STDMETHODIMP Decoder::SetWorkQueueEx(DWORD workQueue, LONG priority) {
-    this->workQueue = workQueue;
-    this->priority = priority;
-    return S_OK; }
-
-STDMETHODIMP Decoder::GetParameters(DWORD *flags, DWORD *workQueue) {
-    *flags = 0;
-    *workQueue = this->workQueue;
-    return S_OK; }
-
 STDMETHODIMP Decoder::Invoke(IMFAsyncResult *result) {
     EnterCriticalSection(&crit);
     IMFSample *sample = NULL;
-    HRESULT ret = process->EndProcess(result, &sample, state);
-    if(sample) {
+    HRESULT ret = process->EndProcess(result, &sample, procState);
+    if(sample && (state == State_Started || state == State_Starting)) {
         pending->push_back(sample);
-        ULONGLONG curr = GetTickCount64();
-        TCHAR foo[80];
         frames++;
-        if(curr - lastTick > 1000) {
-            StringCchPrintf(foo, 80, TEXT("FPS: %f\n"),
-                            static_cast<double>(frames - lastFrame) / (curr - lastTick) * 1000);
-            OutputDebugString(foo);
-            lastTick = curr;
-            frames = 0; }
+        outputFPS();
         imgAdjust(); }
     process = nullptr;
-    if(state->finished) {
-        IMFSample *prev = inSamples->front();
-        prev->Release();
-        inSamples->pop();
-        if(!draining) {
-            QueueEvent(METransformNeedInput, GUID_NULL, S_OK, NULL);
-            inEventCount++; }
-        else if(inSamples->empty()) {
-            QueueEvent(METransformDrainComplete, GUID_NULL, S_OK, NULL); } }
-    if(state->changed) {
-        changing = TRUE;
-        changeFrame = frames;
-        state->MakeChange();
-        TCHAR foo[80];
-        img = state->img;
-        StringCchPrintf(foo, 80, TEXT("Changing to %dx%d (%d:%d) at %0.2f fps\n"), img.width, img.height,
-                                      img.aspect.Numerator, img.aspect.Denominator,
-                                      img.fps.Numerator * 1.0 / img.fps.Denominator);
-        OutputDebugString(foo); }
-    if(!inSamples->empty() && outSamples->size() < MAX_QUEUE_SIZE) {
-        StartProcess(); }
+    if(procState->finished) {
+        if(!inSamples->empty()) {
+            IMFSample *prev = inSamples->front();
+            prev->Release();
+            inSamples->pop(); }
+        if(draining && inSamples->empty()) {
+            QueueEvent(METransformDrainComplete, GUID_NULL, S_OK, NULL);
+            draining = FALSE; }
+        requestSamples(); }
+    if(procState->changed) {
+        makeChange(); }
+    switch(state) {
+    case State_Shutdown:
+        endStream();
+        state = State_Shutdown;
+        break;
+    case State_Stopping:
+        if(mp2dec) {
+            reset(); }
+        else {
+            endStream(); }
+        break;
+    case State_Starting:
+        state = State_Stopped;
+        beginStream();
+    case State_Started:
+        startProcess();
+    default:
+        break; }
     LeaveCriticalSection(&crit);
     return S_OK; }
 
-HRESULT Decoder::BeginGetEvent(IMFAsyncCallback *caller, IUnknown *state) {
-    EnterCriticalSection(&crit);
-    HRESULT ret = shutdown ? MF_E_SHUTDOWN : events->BeginGetEvent(caller, state);
-    LeaveCriticalSection(&crit);
-    return ret; }
+void Decoder::startProcess() {
+    if(allowProcess()) {
+        process = Make<Process>(workQueue, priority);
+        IMFSample *sample = inSamples->front();
+        process->BeginProcess(sample, this, procState); } }
 
-HRESULT Decoder::EndGetEvent(IMFAsyncResult *result, IMFMediaEvent **out) {
-    EnterCriticalSection(&crit);
-    HRESULT ret = shutdown ? MF_E_SHUTDOWN : events->EndGetEvent(result, out);
-    LeaveCriticalSection(&crit);
-    return ret; }
-
-HRESULT Decoder::GetEvent(DWORD flags, IMFMediaEvent **out) {
-    IMFMediaEventQueue *events = NULL;
-    EnterCriticalSection(&crit);
-    HRESULT ret = shutdown ? MF_E_SHUTDOWN : S_OK;
-    if(SUCCEEDED(ret)) {
-        events = this->events;
-        events->AddRef(); }
-    LeaveCriticalSection(&crit);
-    if(SUCCEEDED(ret)) {
-        ret = events->GetEvent(flags, out); }
-    SafeRelease(events);
-    return ret; }
-
-HRESULT Decoder::QueueEvent(MediaEventType type, REFGUID guid, HRESULT status, const PROPVARIANT *val) {
-    EnterCriticalSection(&crit);
-    HRESULT ret = shutdown ? MF_E_SHUTDOWN : events->QueueEventParamVar(type, guid, status, val);
-    LeaveCriticalSection(&crit);
-    return ret; }
-
-HRESULT Decoder::GetShutdownStatus(MFSHUTDOWN_STATUS *status) {
-    EnterCriticalSection(&crit);
-    HRESULT ret = status ? (shutdown ? S_OK : MF_E_INVALIDREQUEST) : E_INVALIDARG;
-    if(SUCCEEDED(ret)) {
-        *status = MFSHUTDOWN_COMPLETED; }
-    LeaveCriticalSection(&crit);
-    return ret; }
-
-HRESULT Decoder::Shutdown() {
-    EnterCriticalSection(&crit);
-    HRESULT ret = events->Shutdown();
-    LeaveCriticalSection(&crit);
-    return ret; }
-
-HRESULT Decoder::GetStreamLimits(DWORD *minIn, DWORD *maxIn, DWORD *minOut, DWORD *maxOut) {
-    if(minIn && maxIn && minOut && maxOut) {
-        *minIn = *maxIn = *minOut = *maxOut = 1;
-        return S_OK; }
-    else {
-        return E_POINTER; } }
-
-HRESULT Decoder::GetStreamCount(DWORD *in, DWORD *out) {
-    if(in && out) {
-        *in = *out = 1;
-        return S_OK; }
-    else {
-        return E_POINTER; } }
-
-HRESULT Decoder::GetStreamIDs(DWORD, DWORD *, DWORD, DWORD *) {
-    return E_NOTIMPL; }
-
-HRESULT Decoder::GetInputStreamInfo(DWORD id, MFT_INPUT_STREAM_INFO *info) {
-    if(info) {
-        if(id == 0) {
-            EnterCriticalSection(&crit);
-            info->hnsMaxLatency = inType ? img.duration * MAX_QUEUE_SIZE : 0;
-            info->dwFlags = MFT_INPUT_STREAM_HOLDS_BUFFERS;
-            info->cbSize = 1;
-            info->cbMaxLookahead = 0;
-            info->cbAlignment = 0;
-            LeaveCriticalSection(&crit);
-            return S_OK; }
-        return MF_E_INVALIDSTREAMNUMBER; }
-    return E_POINTER; }
-
-HRESULT Decoder::GetOutputStreamInfo(DWORD id, MFT_OUTPUT_STREAM_INFO *info) {
-    if(info) {
-        if(id == 0) {
-            EnterCriticalSection(&crit);
-            info->dwFlags = MFT_OUTPUT_STREAM_WHOLE_SAMPLES |
-                MFT_OUTPUT_STREAM_SINGLE_SAMPLE_PER_BUFFER |
-                MFT_OUTPUT_STREAM_FIXED_SAMPLE_SIZE |
-                MFT_OUTPUT_STREAM_PROVIDES_SAMPLES;
-            info->cbAlignment = 0;
-            info->cbSize = outType ? img.size : 0;
-            LeaveCriticalSection(&crit);
-            return S_OK; }
-        return MF_E_INVALIDSTREAMNUMBER; }
-    return E_POINTER; }
-
-HRESULT Decoder::GetAttributes(IMFAttributes **attr) {
-    IMFAttributes *out = NULL;
-    HRESULT ret = MFCreateAttributes(&out, 3);
-    if(SUCCEEDED(ret)) {
-        ret = out->SetUINT32(MF_TRANSFORM_ASYNC, 1); }
-    if(SUCCEEDED(ret)) {
-        ret = out->SetUINT32(MF_TRANSFORM_ASYNC_UNLOCK, 0); }
-    if(SUCCEEDED(ret)) {
-        ret = out->SetUINT32(MFT_SUPPORT_DYNAMIC_FORMAT_CHANGE, 1); }
-    if(SUCCEEDED(ret)) {
-        *attr = out; }
-    return ret; }
-
-HRESULT Decoder::GetInputStreamAttributes(DWORD id, IMFAttributes **attr) {
-    return id == 0 ? GetAttributes(attr) : MF_E_INVALIDSTREAMNUMBER; }
-
-HRESULT Decoder::GetOutputStreamAttributes(DWORD id, IMFAttributes **attr) {
-    return id == 0 ? GetAttributes(attr) : MF_E_INVALIDSTREAMNUMBER; }
-
-HRESULT Decoder::DeleteInputStream(DWORD) {
-    return E_NOTIMPL; }
-
-HRESULT Decoder::AddInputStreams(DWORD, DWORD *) {
-    return E_NOTIMPL; }
-
-HRESULT Decoder::GetInputAvailableType(DWORD id, DWORD index, IMFMediaType **type) {
-    if(type) {
-        if(id == 0) {
-            if(index == 0) {
-                EnterCriticalSection(&crit);
-                IMFMediaType *out = NULL;
-                HRESULT ret = MFCreateMediaType(&out);
-                if(SUCCEEDED(ret)) {
-                    ret = out->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video); }
-                if(SUCCEEDED(ret)) {
-                    ret = out->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_MPEG2); }
-                if(SUCCEEDED(ret) && img.width && img.height) {
-                    ret = MFSetAttributeSize(out, MF_MT_FRAME_SIZE, img.width, img.height); }
-                if(SUCCEEDED(ret) && img.fps.Numerator && img.fps.Denominator) {
-                    ret = MFSetAttributeRatio(out, MF_MT_FRAME_RATE, img.fps.Numerator, img.fps.Denominator); }
-                if(SUCCEEDED(ret) && img.aspect.Numerator && img.aspect.Denominator) {
-                    ret = MFSetAttributeRatio(out, MF_MT_PIXEL_ASPECT_RATIO, img.aspect.Numerator, img.aspect.Denominator); }
-                if(SUCCEEDED(ret)) {
-                    *type = out;
-                    (*type)->AddRef(); }
-                SafeRelease(out);
-                LeaveCriticalSection(&crit);
-                return ret; } } }
-    return MF_E_NO_MORE_TYPES; }
-
-HRESULT Decoder::GetOutputAvailableType(DWORD id, DWORD index, IMFMediaType **type) {
-    if(type) {
-        if(id == 0) {
-            if(index == 0) {
-                EnterCriticalSection(&crit);
-                HRESULT ret = inType ? S_OK : MF_E_TRANSFORM_TYPE_NOT_SET;
-                IMFMediaType *out = NULL;
-                if(SUCCEEDED(ret)) {
-                    ret = MFCreateMediaType(&out); }
-                if(SUCCEEDED(ret)) {
-                    ret = out->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video); }
-                if(SUCCEEDED(ret)) {
-                    ret = out->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12); }
-                if(SUCCEEDED(ret)) {
-                    ret = out->SetUINT32(MF_MT_FIXED_SIZE_SAMPLES, TRUE); }
-                if(SUCCEEDED(ret)) {
-                    ret = out->SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT, TRUE); }
-                if(SUCCEEDED(ret) && img.size) {
-                    ret = out->SetUINT32(MF_MT_SAMPLE_SIZE, img.size); }
-                if(SUCCEEDED(ret) && img.width && img.height) {
-                    ret = MFSetAttributeSize(out, MF_MT_FRAME_SIZE, img.width, img.height); }
-                if(SUCCEEDED(ret) && img.fps.Numerator && img.fps.Denominator) {
-                    ret = MFSetAttributeRatio(out, MF_MT_FRAME_RATE, img.fps.Numerator, img.fps.Denominator); }
-                if(SUCCEEDED(ret) && img.aspect.Numerator && img.aspect.Denominator) {
-                    ret = MFSetAttributeRatio(out, MF_MT_PIXEL_ASPECT_RATIO, img.aspect.Numerator, img.aspect.Denominator); }
-                if(SUCCEEDED(ret)) {
-                    ret = out->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive); }
-                if(SUCCEEDED(ret)) {
-                    *type = out;
-                    (*type)->AddRef(); }
-                SafeRelease(out);
-                LeaveCriticalSection(&crit);
-                return ret; }
-            return MF_E_NO_MORE_TYPES; }
-        return MF_E_INVALIDSTREAMNUMBER; }
-    return E_POINTER; }
-
-HRESULT Decoder::SetInputType(DWORD id, IMFMediaType *type, DWORD flags) {
-    if(id == 0) {
-        if((flags & ~MFT_SET_TYPE_TEST_ONLY) == 0) {
-            EnterCriticalSection(&crit);
-            HRESULT ret = type ? S_OK : E_POINTER;
-            if(SUCCEEDED(ret)) {
-                ret = checkInputType(type); }
-            if(SUCCEEDED(ret) && (flags & MFT_SET_TYPE_TEST_ONLY) == 0) {
-                ret = setInputType(type); }
-            LeaveCriticalSection(&crit);
-            return ret; }
-        return E_INVALIDARG; }
-    return MF_E_INVALIDSTREAMNUMBER; }
-
-HRESULT Decoder::SetOutputType(DWORD id, IMFMediaType *type, DWORD flags) {
-    if(id == 0) {
-        if((flags & ~MFT_SET_TYPE_TEST_ONLY) == 0) {
-            EnterCriticalSection(&crit);
-            HRESULT ret = type ? S_OK : E_POINTER;
-            if(SUCCEEDED(ret)) {
-                ret = checkOutputType(type); }
-            if(SUCCEEDED(ret) && (flags & MFT_SET_TYPE_TEST_ONLY) == 0) {
-                ret = setOutputType(type); }
-            LeaveCriticalSection(&crit);
-            return ret; }
-        return E_INVALIDARG; }
-    return MF_E_INVALIDSTREAMNUMBER; }
-
-HRESULT Decoder::GetInputCurrentType(DWORD id, IMFMediaType **type) {
-    if(type) {
-        if(id == 0) {
-            EnterCriticalSection(&crit);
-            HRESULT ret = inType ? S_OK : MF_E_TRANSFORM_TYPE_NOT_SET;
-            if(SUCCEEDED(ret)) {
-                *type = inType;
-                (*type)->AddRef(); }
-            LeaveCriticalSection(&crit);
-            return ret; }
-        return MF_E_INVALIDSTREAMNUMBER; }
-    return E_POINTER; }
-
-HRESULT Decoder::GetOutputCurrentType(DWORD id, IMFMediaType **type) {
-    if(type) {
-        if(id == 0) {
-            EnterCriticalSection(&crit);
-            HRESULT ret = outType ? S_OK : MF_E_TRANSFORM_TYPE_NOT_SET;
-            if(SUCCEEDED(ret)) {
-                *type = outType;
-                (*type)->AddRef(); }
-            LeaveCriticalSection(&crit);
-            return ret; }
-        return MF_E_INVALIDSTREAMNUMBER; }
-    return E_POINTER; }
-
-HRESULT Decoder::GetInputStatus(DWORD id, DWORD *flags) {
-    if(flags) {
-        if(id == 0) {
-            EnterCriticalSection(&crit);
-            *flags = allowIn() ? MFT_INPUT_STATUS_ACCEPT_DATA : 0;
-            LeaveCriticalSection(&crit);
-            return S_OK; }
-        return MF_E_INVALIDSTREAMNUMBER; }
-    return E_POINTER; }
-
-HRESULT Decoder::GetOutputStatus(DWORD *flags) {
-    if(flags) {
-        EnterCriticalSection(&crit);
-        *flags = allowOut() ? MFT_OUTPUT_STATUS_SAMPLE_READY : 0;
-        LeaveCriticalSection(&crit);
-        return S_OK; }
-    return E_POINTER; }
-
-HRESULT Decoder::SetOutputBounds(LONGLONG, LONGLONG) {
-    return E_NOTIMPL; }
-
-HRESULT Decoder::ProcessEvent(DWORD, IMFMediaEvent *) {
-    return E_NOTIMPL; }
-
-HRESULT Decoder::ProcessMessage(MFT_MESSAGE_TYPE msg, ULONG_PTR) {
-    EnterCriticalSection(&crit);
-    HRESULT ret = S_OK;
-    switch(msg) {
-    case MFT_MESSAGE_COMMAND_FLUSH:
-        ret = reset();
-        break;
-    case MFT_MESSAGE_COMMAND_DRAIN:
-        ret = drain();
-        break;
-    case MFT_MESSAGE_SET_D3D_MANAGER:
-        ret = E_NOTIMPL;
-        break;
-    case MFT_MESSAGE_NOTIFY_BEGIN_STREAMING:
-        ret = beginStream();
-        break;
-    case MFT_MESSAGE_NOTIFY_END_STREAMING:
-        ret = endStream();
-        break;
-    case MFT_MESSAGE_NOTIFY_START_OF_STREAM:
-    case MFT_MESSAGE_NOTIFY_END_OF_STREAM:
-        break; }
-    LeaveCriticalSection(&crit);
-    return ret; }
-
-HRESULT Decoder::ProcessInput(DWORD id, IMFSample *sample, DWORD flags) {
-    if(sample) {
-        if(id == 0) {
-            if(flags == 0) {
-                EnterCriticalSection(&crit);
-                HRESULT ret = inType && outType ? S_OK : MF_E_TRANSFORM_TYPE_NOT_SET;
-                if(SUCCEEDED(ret)) {
-                    ret = AddSample(sample); }
-                LeaveCriticalSection(&crit);
-                return ret; }
-            return E_INVALIDARG; }
-        return MF_E_INVALIDSTREAMNUMBER; }
-    return E_POINTER; }
-
-HRESULT Decoder::ProcessOutput(DWORD flags, DWORD count, MFT_OUTPUT_DATA_BUFFER *samples, DWORD *status) {
-    if(samples && status) {
-        if(flags == 0 && count == 1) {
-            EnterCriticalSection(&crit);
-            HRESULT ret = inType && outType ? S_OK : MF_E_TRANSFORM_TYPE_NOT_SET;
-            if(SUCCEEDED(ret)) {
-                if(changeNeeded()) {
-                    ret = MF_E_TRANSFORM_STREAM_CHANGE;
-                    samples->dwStatus |= MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE; }
-                else {
-                    ret = GetSample(&samples->pSample); } }
-            if(SUCCEEDED(ret)) {
-                if(ret == S_FALSE) {
-                    ret = S_OK;
-                    samples->dwStatus |= MFT_OUTPUT_DATA_BUFFER_INCOMPLETE; } }
-            LeaveCriticalSection(&crit);
-            return ret; }
-        return E_INVALIDARG; }
-    return E_POINTER; }
-
-HRESULT Decoder::StartProcess() {
-    HRESULT ret = S_OK;
-    process = Make<Process>(workQueue, priority);
-    IMFSample *sample = inSamples->front();
-    process->BeginProcess(sample, this, state);
-    return ret; }
-
-HRESULT Decoder::AddSample(IMFSample *sample) {
-    HRESULT ret = allowIn() && inEventCount > 0 ? S_OK : MF_E_NOTACCEPTING;
+HRESULT Decoder::addSample(IMFSample *sample) {
+    HRESULT ret = allowIn() ? S_OK : MF_E_NOTACCEPTING;
     if(SUCCEEDED(ret)) {
         inSamples->push(sample);
         sample->AddRef();
-        inEventCount--;
-        if(process == NULL && outSamples->size() < MAX_QUEUE_SIZE) {
-            state->finished = TRUE;
-            StartProcess(); } }
+        requests--;
+        if(process == NULL) {
+            procState->finished = TRUE;
+            startProcess(); } }
     return ret; }
 
-HRESULT Decoder::GetSample(IMFSample **sample) {
+HRESULT Decoder::getSample(IMFSample **sample) {
     if(sample) {
-        HRESULT ret = allowOut() ? S_OK : E_UNEXPECTED;
+        HRESULT ret = outReady() ? S_OK : E_UNEXPECTED;
         if(SUCCEEDED(ret)) {
             *sample = outSamples->front();
             outSamples->pop();
-            ret = allowOut() ? S_OK : S_FALSE;
-            if(process == NULL && !inSamples->empty()) {
-                StartProcess(); } }
-        framesSent++;
+            ret = outReady() ? S_OK : S_FALSE;
+            startProcess();
+            framesSent++; }
         return ret; }
     return E_POINTER; }
+
+void Decoder::requestSamples() {
+    if(state == State_Started || state == State_Starting) {
+        for(;requests < MAX_QUEUE_SIZE; requests++) {
+            QueueEvent(METransformNeedInput, GUID_NULL, S_OK, NULL); } } }
 
 HRESULT Decoder::beginStream() {
     HRESULT ret = S_OK;
@@ -437,71 +107,78 @@ HRESULT Decoder::beginStream() {
         if(SUCCEEDED(ret) && !(mp2info = mpeg2_info(mp2dec))) {
             ret = E_FAIL; } }
     if(SUCCEEDED(ret)) {
-        ret = reset(); }
+        if(state == State_Stopped) {
+            ret = reset(); }
+        else {
+            state = State_Starting;
+            return ret; } }
     if(SUCCEEDED(ret)) {
-        for(UINT32 x = 0; x < MAX_QUEUE_SIZE; x++) {
-            QueueEvent(METransformNeedInput, GUID_NULL, S_OK, NULL);
-            inEventCount++; } }
+        state = State_Started;
+        requestSamples(); }
     return ret; }
 
 HRESULT Decoder::endStream() {
     reset();
-    if(mp2dec) {
-        mpeg2_close(mp2dec);
-        mp2dec = NULL;
-        mp2info = NULL; }
-    state->mp2dec = NULL;
-    state->mp2info = NULL;
+    if(process == NULL) {
+        if(mp2dec) {
+            mpeg2_close(mp2dec); }
+        procState->mp2dec = NULL;
+        procState->mp2info = NULL; }
+    mp2dec = NULL;
+    mp2info = NULL;
     return S_OK; }
 
 BOOL Decoder::allowIn() const {
-    return inSamples->size() < MAX_QUEUE_SIZE && !draining; }
+    return state == State_Started && inSamples->size() < MAX_QUEUE_SIZE && requests > 0 && !draining; }
 
-BOOL Decoder::allowOut() const {
+BOOL Decoder::allowProcess() const {
+    return state == State_Started && process == NULL && !inSamples->empty() && outSamples->size() < MAX_QUEUE_SIZE; }
+
+BOOL Decoder::outReady() const {
     return !outSamples->empty(); }
 
 BOOL Decoder::changeNeeded() const {
     return changing && framesSent >= changeFrame; }
 
-HRESULT Decoder::drain() {
-    draining = TRUE;
-    return S_OK; }
-
 HRESULT Decoder::reset() {
-    for(;!inSamples->empty(); inSamples->pop()) {
-        inSamples->front()->Release(); }
-    for(;!outSamples->empty(); outSamples->pop()) {
-        outSamples->front()->Release(); }
-    for(vector<IMFSample *>::iterator itr = pending->begin(); itr != pending->end(); itr++) {
-        (*itr)->Release(); }
-    pending->clear();
-    draining = FALSE;
-    if(mp2dec) {
-        mpeg2_reset(mp2dec, 0); }
-    state->mp2dec = mp2dec;
-    state->mp2info = mp2info;
-    state->img = img;
-    state->imgTS = 0;
-    state->imgDuration = img.duration;
-    changing = FALSE;
-    lastTS = 0;
-    frames = 0;
-    framesSent = 0;
-    lastFrame = 0;
-    lastTick = GetTickCount64();
-    inEventCount = 0;
+    if(process == NULL) {
+        for(;!inSamples->empty(); inSamples->pop()) {
+            inSamples->front()->Release(); }
+        for(;!outSamples->empty(); outSamples->pop()) {
+            outSamples->front()->Release(); }
+        for(vector<IMFSample *>::iterator itr = pending->begin(); itr != pending->end(); itr++) {
+            (*itr)->Release(); }
+        pending->clear();
+        draining = FALSE;
+        if(mp2dec) {
+            mpeg2_reset(mp2dec, 0); }
+        procState->mp2dec = mp2dec;
+        procState->mp2info = mp2info;
+        procState->img = img;
+        procState->imgTS = 0;
+        procState->imgDuration = img.duration;
+        changing = FALSE;
+        state = State_Stopped; 
+        lastTS = 0;
+        frames = 0;
+        framesSent = 0;
+        lastFrame = 0;
+        lastTick = GetTickCount64();
+        requests = 0; }
+    else {
+        state = State_Stopping; }
     return S_OK; }
 
-HRESULT Decoder::clear() {
-    HRESULT ret = reset();
-    if(SUCCEEDED(ret)) {
-        img.SetSize(0, 0);
-        img.SetAspect(0, 0);
-        img.SetFPS(0, 0);
-        state->img = img;
-        if(mp2dec) {
-            mpeg2_reset(mp2dec, 1); } }
-    return ret; }
+void Decoder::makeChange() {
+    TCHAR foo[80];
+    changing = TRUE;
+    changeFrame = frames;
+    procState->MakeChange();
+    img = procState->img;
+    StringCchPrintf(foo, 80, TEXT("Changing to %dx%d (%d:%d) at %0.2f fps\n"), img.width, img.height,
+                    img.aspect.Numerator, img.aspect.Denominator,
+                    img.fps.Numerator * 1.0 / img.fps.Denominator);
+    OutputDebugString(foo); }
 
 void Decoder::imgInterpolate(vector<IMFSample *>::const_iterator itr) {
     LONGLONG ts1 = 0, ts2 = 0, rise = 0, run = 0, start = 0;
@@ -568,18 +245,16 @@ void Decoder::imgAdjust() {
             outSamples->push(*itr);
             QueueEvent(METransformHaveOutput, GUID_NULL, S_OK, NULL); }
         pending->erase(pending->begin(), end); } }
-/*
-        for(int i = 0; !pending->empty() && !timestamps.empty() && (draining || i < MAX_QUEUE_SIZE / 4); i++) {
-            IMFSample *s = pending->front();
-            set<LONGLONG>::iterator t = timestamps.begin(), t2 = t;
-            t2++;
-            s->SetSampleTime(*t);
-            if(t2 != timestamps.end()) {
-                s->SetSampleDuration(*t2 - *t); }
-            outSamples->push(s);
-            pending->pop();
-            timestamps.erase(t); } } }
-*/
+
+void Decoder::outputFPS() {
+    TCHAR foo[80];
+    ULONGLONG curr = GetTickCount64();
+    if(curr - lastTick > 1000) {
+        StringCchPrintf(foo, 80, TEXT("FPS: %f\n"),
+                        static_cast<double>(frames - lastFrame) / (curr - lastTick) * 1000);
+        OutputDebugString(foo);
+        lastTick = curr;
+        frames = 0; } }
 
 HRESULT Decoder::info(IMFMediaType *type, GUID *major, GUID *minor, UINT32 *width, UINT32 *height,
                       MFRatio *fps, MFRatio *aspect) {
@@ -627,8 +302,8 @@ HRESULT Decoder::setInputType(IMFMediaType *type) {
         img.SetFPS(fps.Numerator, fps.Denominator);
         inType = type;
         inType->AddRef();
-        if(!(inSamples->empty() && outSamples->empty() && pending->empty())) {
-            state->RequestChange(img); } }
+        if(state != State_Started) {
+            procState->RequestChange(img); } }
     return ret; }
 
 HRESULT Decoder::checkOutputType(IMFMediaType *type) {

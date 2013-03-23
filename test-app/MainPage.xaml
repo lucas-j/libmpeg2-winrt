@@ -11,5 +11,6 @@
         <MediaElement x:Name="Player" HorizontalAlignment="Center" Margin="10,10,10,100" VerticalAlignment="Top" Height="900" Width="1900"/>
         <Button Content="Play" HorizontalAlignment="Left" Height="95" Margin="10,0,0,10" VerticalAlignment="Bottom" Width="200" Click="Button_Click_1" Foreground="#FF010066" BorderBrush="#FF010066"/>
         <Button Content="Stop" HorizontalAlignment="Right" Height="95" Margin="10,0,0,10" VerticalAlignment="Bottom" Width="200" Click="Button_Click_2" Foreground="#FF010066" BorderBrush="#FF010066"/>
+        <Slider x:Name="SeekBar" Margin="220,0,210,29" VerticalAlignment="Bottom" Height="49" Foreground="#FF010066"/>
     </Grid>
 </Page>

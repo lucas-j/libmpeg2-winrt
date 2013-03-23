@@ -50,6 +50,10 @@
     </ClCompile>
     <ClCompile Include="common.cpp" />
     <ClCompile Include="process.cpp" />
+    <ClCompile Include="decoder_mf.cpp" />
+    <ClCompile Include="rgb.c">
+      <Filter>libmpeg2</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="attributes.h">

@@ -11,8 +11,8 @@ public:
     STDMETHOD(RuntimeClassInitialize)();
     STDMETHODIMP GetParameters(DWORD *flags, DWORD *workQueue);
     STDMETHODIMP Invoke(IMFAsyncResult *result);
-    HRESULT BeginProcess(IMFSample *sample, IMFAsyncCallback *cb, const ComPtr<DecoderState> state);
-    HRESULT EndProcess(IMFAsyncResult *result, IMFSample **sample, ComPtr<DecoderState> state);
+    HRESULT BeginProcess(IMFSample *sample, IMFAsyncCallback *cb, const ComPtr<ProcessState> state);
+    HRESULT EndProcess(IMFAsyncResult *result, IMFSample **sample, ComPtr<ProcessState> state);
 
 protected:
     HRESULT process();
@@ -28,5 +28,5 @@ protected:
 protected:
     DWORD workQueue;
     LONG priority;
-    ComPtr<DecoderState> state;
+    ComPtr<ProcessState> state;
     ComPtr<ProcessSamples> samples; };

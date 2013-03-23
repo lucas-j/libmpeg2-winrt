@@ -50,12 +50,12 @@ public:
     MFRatio fps;
     LONGLONG duration; };
 
-class DecoderState: public RuntimeClass<RuntimeClassFlags<RuntimeClassType::ClassicCom>, IUnknown> {
+class ProcessState: public RuntimeClass<RuntimeClassFlags<RuntimeClassType::ClassicCom>, IUnknown> {
 public:
-    DecoderState();
+    ProcessState();
     STDMETHOD(RuntimeClassInitialize)();
-    virtual ~DecoderState();
-    DecoderState(const DecoderState &copy);
+    virtual ~ProcessState();
+    ProcessState(const ProcessState &copy);
     BOOL RequestChange(const ImageInfo &info);
     BOOL OutputChanged() const;
     void MakeChange();

@@ -23,7 +23,7 @@ STDMETHODIMP Process::Invoke(IMFAsyncResult *result) {
     if(SUCCEEDED(ret)) {
         ret = caller->GetState(&unknown); }
     if(SUCCEEDED(ret)) {
-        state = dynamic_cast<DecoderState *>(unknown);
+        state = dynamic_cast<ProcessState *>(unknown);
         ret = caller->GetObject(&unknown); }
     if(SUCCEEDED(ret)) {
         samples = dynamic_cast<ProcessSamples *>(unknown); }
@@ -36,7 +36,7 @@ STDMETHODIMP Process::Invoke(IMFAsyncResult *result) {
     SafeRelease(caller);
     return S_OK; }
 
-HRESULT Process::BeginProcess(IMFSample *sample, IMFAsyncCallback *cb, const ComPtr<DecoderState> state) {
+HRESULT Process::BeginProcess(IMFSample *sample, IMFAsyncCallback *cb, const ComPtr<ProcessState> state) {
     ComPtr<ProcessSamples> samples = Make<ProcessSamples>(sample);
     HRESULT ret = E_OUTOFMEMORY;
     if(samples) {
@@ -47,13 +47,13 @@ HRESULT Process::BeginProcess(IMFSample *sample, IMFAsyncCallback *cb, const Com
         SafeRelease(result); }
     return ret; }
 
-HRESULT Process::EndProcess(IMFAsyncResult *result, IMFSample **sample, ComPtr<DecoderState> state) {
+HRESULT Process::EndProcess(IMFAsyncResult *result, IMFSample **sample, ComPtr<ProcessState> state) {
     IUnknown *unknown = NULL;
     ProcessSamples *samples = NULL;
     IMFSample *out = NULL;
     HRESULT ret = result->GetState(&unknown);
     if(SUCCEEDED(ret)) {
-        state = ComPtr<DecoderState>(dynamic_cast<DecoderState *>(unknown));
+        state = ComPtr<ProcessState>(dynamic_cast<ProcessState *>(unknown));
         ret = result->GetObject(&unknown); }
     if(SUCCEEDED(ret)) {
         samples = dynamic_cast<ProcessSamples *>(unknown);
@@ -92,10 +92,13 @@ HRESULT Process::imgRead() {
     IMFSample *sample = NULL;
     BYTE *data = NULL;
     DWORD len = 0;
+    UINT32 dis = 0;
     HRESULT ret = samples->GetIn(&sample);
     if(SUCCEEDED(ret)) {
-        sample->ConvertToContiguousBuffer(&buf); }
-    if(SUCCEEDED(ret)) {
+        sample->GetUINT32(MFSampleExtension_Discontinuity, &dis);
+        if(dis != 0) {
+            mpeg2_reset(state->mp2dec, 0); }
+        sample->ConvertToContiguousBuffer(&buf);
         ret = buf->Lock(&data, NULL, &len); }
     if(SUCCEEDED(ret)) {
         LONGLONG ts = 0;
@@ -154,6 +157,8 @@ HRESULT Process::imgFill(BYTE *data, LONG stride) {
         for(UINT32 line = 0; line < img_height; line++, data += stride, luma += width) {
             memcpy_s(data, stride, luma, img_width); }
         img_height /= 2;
+        if(chroma_height >= img_height) {
+            chroma_width *= 2; }
         for(UINT32 line = 0; line < img_height; line++, data += stride, u += chroma_width, v += chroma_width) {
             interlace(data, u, v, img_width); } }
     return ret; }
