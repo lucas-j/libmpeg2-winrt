@@ -1,0 +1,50 @@
+﻿<common:LayoutAwarePage
+    x:Name="pageRoot"
+    x:Class="mpeg2_player.AboutPanel"
+    DataContext="{Binding DefaultViewModel, RelativeSource={RelativeSource Self}}"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:mpeg2_player"
+    xmlns:common="using:mpeg2_player.Common"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <Grid Background="White">
+        <StackPanel>
+            <TextBlock x:Name="txtHeader" Foreground="Black" HorizontalAlignment="Left" FontSize="24" TextWrapping="Wrap" VerticalAlignment="Top"
+                       Text="MPEG-2 TS Player"/>
+            <RichTextBlock x:Name="txtBody" Foreground="Black" FontSize="18" Margin="0,20,0,0" IsTextSelectionEnabled="false">
+                <Paragraph>
+                    The
+                    <InlineUIContainer>
+                        <HyperlinkButton FontSize="18" Margin="0,0,-2,-5" Style="{StaticResource TextButtonStyle}" Foreground="#FF1570A6"
+                                         Content="source code" NavigateUri="https://github.com/lucas-j/libmpeg2-winrt/"/>
+                    </InlineUIContainer> for this application is available under the GNU GPLv2.
+                    <LineBreak/>
+                    <LineBreak/>The author would like to thank the development teams and maintainers of the following software libraries:
+                    <LineBreak/> -
+                    <InlineUIContainer>
+                        <HyperlinkButton FontSize="18" Margin="0,0,-2,-5" Style="{StaticResource TextButtonStyle}" Foreground="#FF1570A6"
+                                         Content="libmpeg2" NavigateUri="http://libmpeg2.sourceforge.net/"/>
+                    </InlineUIContainer>
+                    <LineBreak/> -
+                    <InlineUIContainer>
+                        <HyperlinkButton FontSize="18" Margin="0,0,-2,-5" Style="{StaticResource TextButtonStyle}" Foreground="#FF1570A6"
+                                         Content="Microsoft Player Framework" NavigateUri="http://playerframework.codeplex.com/"/>
+                    </InlineUIContainer>
+                    <LineBreak/> -
+                    <InlineUIContainer>
+                        <HyperlinkButton FontSize="18" Margin="0,0,-2,-5" Style="{StaticResource TextButtonStyle}" Foreground="#FF1570A6"
+                                         Content="Microsoft Media Foundation" NavigateUri="http://msdn.microsoft.com/en-us/library/windows/desktop/ms694197.aspx"/>
+                    </InlineUIContainer>
+                    <LineBreak/>
+                    <LineBreak/>Post issues, feature requests or other suggestions to
+                    <InlineUIContainer>
+                        <HyperlinkButton FontSize="18" Margin="0,0,2,-5" Style="{StaticResource TextButtonStyle}" Foreground="#FF1570A6"
+                                         Content="GitHub" NavigateUri="https://github.com/lucas-j/libmpeg2-winrt/issues/"/>
+                    </InlineUIContainer>.
+                </Paragraph>
+            </RichTextBlock>
+        </StackPanel>
+    </Grid>
+</common:LayoutAwarePage>
