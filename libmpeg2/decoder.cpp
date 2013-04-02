@@ -39,8 +39,7 @@ STDMETHODIMP Decoder::Invoke(IMFAsyncResult *result) {
             prev->Release();
             inSamples->pop(); }
         if(draining && inSamples->empty()) {
-            QueueEvent(METransformDrainComplete, GUID_NULL, S_OK, NULL);
-            draining = FALSE; }
+            endDrain(); }
         requestSamples(); }
     if(procState->changed) {
         makeChange(); }
@@ -98,6 +97,15 @@ void Decoder::requestSamples() {
     if(state == State_Started || state == State_Starting) {
         QueueEvent(METransformNeedInput, GUID_NULL, S_OK, NULL);
         requests++; } }
+
+void Decoder::beginDrain() {
+    draining = TRUE;
+    if(inSamples->size() == 0) {
+        endDrain(); } }
+
+void Decoder::endDrain() {
+    QueueEvent(METransformDrainComplete, GUID_NULL, S_OK, NULL);
+    draining = FALSE; }
 
 HRESULT Decoder::beginStream() {
     HRESULT ret = S_OK;

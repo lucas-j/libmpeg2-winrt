@@ -74,6 +74,8 @@ protected:
     HRESULT addSample(IMFSample *sample);
     HRESULT getSample(IMFSample **sample);
     void requestSamples();
+    void beginDrain();
+    void endDrain();
     BOOL allowIn() const;
     BOOL allowProcess() const;
     BOOL allowAddPending() const;

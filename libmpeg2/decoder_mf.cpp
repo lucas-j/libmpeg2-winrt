@@ -293,7 +293,7 @@ HRESULT Decoder::ProcessMessage(MFT_MESSAGE_TYPE msg, ULONG_PTR) {
         ret = reset();
         break;
     case MFT_MESSAGE_COMMAND_DRAIN:
-        draining = TRUE;
+        beginDrain();
         break;
     case MFT_MESSAGE_SET_D3D_MANAGER:
         ret = E_NOTIMPL;
