@@ -23,3 +23,8 @@ TODO:
 - Smoother seek transitions (e.g., seek only to nearest P-frames)
 - Parallel decoding (this would be tricky to implement, but worth it)
 - Various UI improvements to app (playlist, subtitle support, metadata...)
+
+=== ADDED ================================================================
+Converted project to VS 2013
+Tested on Microsoft Surface 2 (ARM)
+Player listen to m3u Files and parse livestream (viewing Dreambox Mpeg2-SD-Channels)
