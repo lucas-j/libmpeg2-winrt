@@ -20,9 +20,13 @@ namespace mpeg2_player {
                 Frame.Navigate(typeof(PlayerPage), item.ID); } }
 
         private async void OpenFileButton_Click(object sender, RoutedEventArgs e) {
+
+            
             int id = await App.Current.PickFile();
             if(id >= 0) {
-                Frame.Navigate(typeof(PlayerPage), id); } }
+                Frame.Navigate(typeof(PlayerPage), id); 
+            } 
+        }
 
         private void Header_Click(object sender, RoutedEventArgs e) {
             FrameworkElement elem = sender as FrameworkElement;
