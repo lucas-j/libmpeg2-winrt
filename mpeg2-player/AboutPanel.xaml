@@ -38,6 +38,13 @@
                                          Content="Microsoft Media Foundation" NavigateUri="http://msdn.microsoft.com/en-us/library/windows/desktop/ms694197.aspx"/>
                     </InlineUIContainer>
                     <LineBreak/>
+                    <LineBreak/>Special thanks to direct contributors to this project:
+                    <LineBreak/> -
+                    <InlineUIContainer>
+                        <HyperlinkButton FontSize="18" Margin="0,0,-2,-5" Style="{StaticResource TextButtonStyle}" Foreground="#FF1570A6"
+                                         Content="savage81" NavigateUri="https://github.com/savage81"/>
+                    </InlineUIContainer>
+                    <LineBreak/>
                     <LineBreak/>Post issues, feature requests or other suggestions to
                     <InlineUIContainer>
                         <HyperlinkButton FontSize="18" Margin="0,0,2,-5" Style="{StaticResource TextButtonStyle}" Foreground="#FF1570A6"

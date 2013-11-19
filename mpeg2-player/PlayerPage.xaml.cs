@@ -28,9 +28,7 @@ namespace mpeg2_player {
             MediaPlayer.MediaExtensionManager.RegisterVideoDecoder("libmpeg2.Decoder", MPEG2_GUID, new Guid());
             MediaPlayer.MediaStarted += MediaPlayer_MediaStarted;
             MediaPlayer.MediaEnded += MediaPlayer_MediaEnded;
-            MediaPlayer.IsInteractiveChanged += MediaPlayer_IsInteractiveChanged;
-        
-        }
+            MediaPlayer.IsInteractiveChanged += MediaPlayer_IsInteractiveChanged; }
 
         private void PlayerPage_PointerMoved(object sender, PointerRoutedEventArgs e) {
             MediaPlayer.IsInteractive = true; }
@@ -59,20 +57,14 @@ namespace mpeg2_player {
 
         private void App_Suspending(object sender, SuspendingEventArgs e) {
             MediaPlayer.Pause(); }
-
-       
+        
         protected override async void LoadState(object param, Dictionary<string, object> pageState) {
             base.LoadState(param, pageState);
-
-           
-            if (param.GetType() == typeof(string)) //came from OnFileActivated
-            {
+            if(param.GetType() == typeof(string)) {
+                /* streaming URL from m3u */
                 MediaPlayer.Source = new Uri((string)param, UriKind.Absolute);
-                MediaPlayer.Play();
-            }
-            else
-            { 
-
+                MediaPlayer.Play(); }
+            else { 
                 int id = (int)param;
                 VideoDataItem item = VideoDataSource.GetItem(id);
                 if(item != null) {
@@ -85,25 +77,19 @@ namespace mpeg2_player {
                 if(pageState != null) {
                     MediaPlayerState state = pageState["MediaState"] as MediaPlayerState;
                     if(state != null) {
-                        MediaPlayer.RestorePlayerState(state); } } }
-             
-            }
+                        MediaPlayer.RestorePlayerState(state); } } } }
 
         protected override void SaveState(Dictionary<string, object> pageState) {
-            if(file != null)
-            { 
-            MediaPlayerState state = MediaPlayer.GetPlayerState();
-            StorageItemAccessList future = StorageApplicationPermissions.FutureAccessList;
-            future.Clear();
-            string token = future.Add(file);
-            pageState.Add("MediaState", state);
-            pageState.Add("fileToken", token);
-            base.SaveState(pageState);
-            if(teardown) {
-                MediaPlayer.Dispose(); 
-            } 
-            }
-        }
+            if(file != null) {
+                MediaPlayerState state = MediaPlayer.GetPlayerState();
+                StorageItemAccessList future = StorageApplicationPermissions.FutureAccessList;
+                future.Clear();
+                string token = future.Add(file);
+                pageState.Add("MediaState", state);
+                pageState.Add("fileToken", token);
+                base.SaveState(pageState);
+                if(teardown) {
+                    MediaPlayer.Dispose(); } } }
 
         protected override void OnNavigatedTo(NavigationEventArgs e) {
             base.OnNavigatedTo(e);

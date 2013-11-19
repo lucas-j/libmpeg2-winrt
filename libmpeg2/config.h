@@ -4,9 +4,10 @@
 #pragma warning (disable:4028)
 
 /* autodetect accelerations */
-#ifndef _M_ARM
+#ifdef _M_IX86
 #define ACCEL_DETECT
 #endif
+
 /* alpha architecture */
 /* #undef ARCH_ALPHA */
 
@@ -17,9 +18,10 @@
 /* #undef ARCH_SPARC */
 
 /* x86 architecture */
-#ifndef _M_ARM
+#ifdef _M_IX86
 #define ARCH_X86
 #endif
+
 /* maximum supported data alignment */
 /* #undef ATTRIBUTE_ALIGNED_MAX */
 

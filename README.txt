@@ -11,20 +11,28 @@ back MPEG-2 videos. A sample Windows 8 app is provided.
 
 Because libmpeg2 is GPL, this project must also be licensed as GPL as well.
 
-TODO:
-- Port SSE2/MMX code to Microsoft Visual Studio 12 (done)
-- Add seek support (done)
+Thanks:
+- libmpeg2 team (http://libmpeg2.sourceforge.net/)
+- Microsoft Player Framework team (http://playerframework.codeplex.com/)
+- Microsoft Media Foundation team (http://msdn.microsoft.com/en-us/library/windows/desktop/ms694197.aspx)
+- savage81 (https://github.com/savage81)
+- Jeff O'Neill
+
+Next up:
+- Add a demultiplexer for MPEG-2 PS and TS, and WTV
+
+Todo:
 - Implement quality-of-service control to allow older CPUs to framedrop
 - Allow arbitrary playback (backward, seeking, etc.)
-- Add a demultiplexer for MPEG-2 PS and TS, and WTV
 - Add an audio processing decoder as well (doesn't seem entirely necessary)
 - Migrate inline assembly code to Intel intrinsics, to allow x64 native builds
-- Test ARM build (I'd need access to a Surface RT for this)
 - Smoother seek transitions (e.g., seek only to nearest P-frames)
 - Parallel decoding (this would be tricky to implement, but worth it)
 - Various UI improvements to app (playlist, subtitle support, metadata...)
 
-=== ADDED ================================================================
-Converted project to VS 2013
-Tested on Microsoft Surface 2 (ARM)
-Player listen to m3u Files and parse livestream (viewing Dreambox Mpeg2-SD-Channels)
+Completed:
+- Microsoft Visual Studio 13 support (thanks savage81!)
+- Port SSE2/MMX code to Microsoft Visual Studio 12/13
+- Add seek support
+- ARM / WinRT support (thanks savage81!)
+- m3u support for streaming MPEG-2 DTV from Dreambox (thanks savage81!)

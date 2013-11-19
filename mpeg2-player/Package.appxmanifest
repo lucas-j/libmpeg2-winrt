@@ -31,10 +31,23 @@
       </m2:VisualElements>
       <Extensions>
         <Extension Category="windows.fileTypeAssociation">
-          <FileTypeAssociation Name="mpeg2player">
-            <DisplayName>Mpeg2 Player (m3u Dreambox)</DisplayName>
+          <FileTypeAssociation Name="mpeg2playerplaylist">
+            <DisplayName>Playlist</DisplayName>
+            <EditFlags OpenIsSafe="true" />
             <SupportedFileTypes>
               <FileType>.m3u</FileType>
+            </SupportedFileTypes>
+          </FileTypeAssociation>
+        </Extension>
+        <Extension Category="windows.fileTypeAssociation">
+          <FileTypeAssociation Name="mpeg2playervideofiles">
+            <DisplayName>MPEG-2 Files</DisplayName>
+            <EditFlags OpenIsSafe="true" />
+            <SupportedFileTypes>
+              <FileType ContentType="video/mpeg">.mpg</FileType>
+              <FileType ContentType="video/mp2t">.mpeg</FileType>
+              <FileType ContentType="video/mp2t">.m2v</FileType>
+              <FileType ContentType="video/mp2ts">.ts</FileType>
             </SupportedFileTypes>
           </FileTypeAssociation>
         </Extension>

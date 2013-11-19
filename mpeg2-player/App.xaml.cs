@@ -19,7 +19,6 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.ViewManagement;
-//using Callisto.Controls;
 using mpeg2_player.Common;
 using mpeg2_player.Data;
 
@@ -33,42 +32,34 @@ namespace mpeg2_player {
         public App() {
             Current = this;
             this.InitializeComponent();
-            this.Suspending += OnSuspending;
-            
-        }
+            this.Suspending += OnSuspending; }
 
-        protected async override void OnFileActivated(FileActivatedEventArgs args)
-        {
-           if(args.Files != null && args.Files.Count > 0)
-           {
-               //string path2m3u = args.Files[0].Path;
-               //StorageFile file = await StorageFile.GetFileFromPathAsync(path2m3u);
-               StorageFile file = (StorageFile)args.Files[0];
-               IList<string> data = await FileIO.ReadLinesAsync(file);
-               string streamUrl = data.ToList().Find(item => item.StartsWith("http://"));
-               //string streamUrl = data[0].Substring(data[0].IndexOf("http://"));
-               Frame rootFrame = Window.Current.Content as Frame;
-               if (rootFrame == null)
-               {
-                   rootFrame = new Frame();
-                   SuspensionManager.RegisterFrame(rootFrame, "AppFrame");
-                   if (args.PreviousExecutionState == ApplicationExecutionState.Terminated)
-                   {
-                       try
-                       {
-                           await SuspensionManager.RestoreAsync();
-                       }
-                       catch (SuspensionManagerException) { }
-                   }
-                   Window.Current.Content = rootFrame;
-               }              
-                if (!rootFrame.Navigate(typeof(PlayerPage), streamUrl))
-                {
-                    throw new Exception("Failed to create initial page");
-                }
-             
-           }
-        }
+        private async Task<Frame> createRootFrame(IActivatedEventArgs args) { 
+            Frame rootFrame = new Frame();
+            SuspensionManager.RegisterFrame(rootFrame, "AppFrame");
+            if(args.PreviousExecutionState == ApplicationExecutionState.Terminated) {
+                try {
+                    await SuspensionManager.RestoreAsync(); }
+                catch(SuspensionManagerException) {} }
+            Window.Current.Content = rootFrame;
+            return rootFrame; }
+
+        protected async override void OnFileActivated(FileActivatedEventArgs args) {
+            if(args.Files != null && args.Files.Count > 0) {
+                StorageFile file = (StorageFile)args.Files[0];
+                object arg = null;
+                if(file.FileType.ToLower() == ".m3u") {
+                    IList<string> data = await FileIO.ReadLinesAsync(file);
+                    arg = data.ToList().Find(item => item.StartsWith("http://")); }
+                else {
+                    int id = AddFile(file, 0);
+                    if(id >= 0) {
+                        arg = id; } }
+                Frame rootFrame = Window.Current.Content as Frame;
+                if(rootFrame == null) {
+                    rootFrame = await createRootFrame(args); }
+                if(arg != null && !rootFrame.Navigate(typeof(PlayerPage), arg)) {
+                    throw new Exception("Failed to create initial page"); } } }
 
         static App() {
             SuspensionManager.KnownTypes.Add(typeof(Microsoft.PlayerFramework.MediaPlayerState)); }
@@ -76,13 +67,7 @@ namespace mpeg2_player {
         protected override async void OnLaunched(LaunchActivatedEventArgs args) {
             Frame rootFrame = Window.Current.Content as Frame;
             if(rootFrame == null) {
-                rootFrame = new Frame();
-                SuspensionManager.RegisterFrame(rootFrame, "AppFrame");
-                if(args.PreviousExecutionState == ApplicationExecutionState.Terminated) {
-                    try {
-                        await SuspensionManager.RestoreAsync(); }
-                    catch (SuspensionManagerException) {} }
-                Window.Current.Content = rootFrame; }
+                rootFrame = await createRootFrame(args); }
             if(rootFrame.Content == null) {
                 if(!rootFrame.Navigate(typeof(MainPage))) {
                     throw new Exception("Failed to create initial page"); } }
@@ -108,10 +93,10 @@ namespace mpeg2_player {
         private void About_Click(IUICommand cmd) {
             Windows.UI.Xaml.Controls.SettingsFlyout settings = new Windows.UI.Xaml.Controls.SettingsFlyout();
             settings.Background = new SolidColorBrush(Colors.White);
-            //settings.HeaderBrush = new SolidColorBrush(Colors.Black);
+            settings.HeaderBackground = new SolidColorBrush(Colors.Black);
             settings.Content = new AboutPanel();
-            //settings.HeaderText = "About";
-            //settings.IsOpen = true;            
+            settings.Title = "About";
+            settings.Show();
             RestoreCursor(); }
 
         private async void PrivacyPolicy_Click(IUICommand cmd) {
